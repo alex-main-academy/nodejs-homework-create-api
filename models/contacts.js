@@ -1,95 +1,140 @@
-const fs = require("fs/promises");
-const path = require("path");
-const { addContactSchema, updateContactSchema } = require("./schema");
+const {
+  getAllContacts,
+  getById,
+  createContact,
+  deleteContact,
+  updatingContact,
+  updatingStatusContact,
+} = require("../service");
 
-const currentPath = path.join(__dirname, "contacts.json");
-
-const listContacts = async () => {
+const listContacts = async (req, res, next) => {
   try {
-    const response = await fs.readFile(currentPath);
-    return response;
+    const response = await getAllContacts();
+    res.json({
+      status: "success",
+      code: 200,
+      data: {
+        contacts: response,
+      },
+    });
   } catch (e) {
-    return e.message;
+    console.error(e);
+    next(e);
   }
 };
 
-const getContactById = async (contactId) => {
+const getContactById = async (req, res, next) => {
+  const { contactId } = req.params;
+  console.log(contactId);
   try {
-    const contactsList = await JSON.parse(await fs.readFile(currentPath));
-    const contact = await contactsList.filter((item) => item.id === contactId);
-
-    if (contact.length === 1) {
-      return contact;
+    const response = await getById(contactId);
+    if (response) {
+      res.json({
+        status: "success",
+        code: 200,
+        data: { contact: response },
+      });
     } else {
-      const error = new Error("Not found!");
-      error.status = 404;
-      throw error;
+      res.status(404).json({
+        status: "error",
+        code: 404,
+        message: `Not found contact id: ${contactId}`,
+        data: "Not Found",
+      });
     }
   } catch (e) {
-    return e;
+    console.error(e);
+    next(e);
   }
 };
 
-const removeContact = async (contactId) => {
+const removeContact = async (req, res, next) => {
   try {
-    const contactsList = await JSON.parse(await fs.readFile(currentPath));
-    const newContactsList = await contactsList.filter(
-      (item) => item.id !== contactId
-    );
+    const { contactId } = req.params;
+    const response = await deleteContact(contactId);
+    res.status(200).json({
+      status: "deleted",
+      code: 200,
+      data: { message: response },
+    });
+  } catch (e) {
+    res.status(404).json({
+      status: "failed",
+      code: 404,
+      data: { message: e.message },
+    });
+    next(e);
+  }
+};
 
-    if (newContactsList.length === contactsList.length - 1) {
-      await fs.writeFile(currentPath, JSON.stringify(newContactsList, null, 2));
+const addContact = async (req, res, next) => {
+  try {
+    const contact = req.body;
+    const response = await createContact(contact);
 
-      return { message: "contact deleted" };
+    res.status(201).json({
+      status: "success",
+      code: 201,
+      data: { contact: response },
+    });
+  } catch (e) {
+    res.status(400).json({
+      status: "failed",
+      code: 400,
+      data: { message: e.message },
+    });
+    next(e);
+  }
+};
+
+const updateContact = async (req, res, next) => {
+  try {
+    const { contactId } = req.params;
+    const newContact = req.body;
+
+    const response = await updatingContact(contactId, newContact);
+    res.status(200).json({
+      status: "updated",
+      code: 200,
+      data: { message: response },
+    });
+  } catch (e) {
+    res.status(400).json({
+      status: "failed",
+      code: 400,
+      data: { message: e.message },
+    });
+    next(e);
+  }
+};
+
+const updateStatusContact = async (req, res, next) => {
+  const { contactId } = req.params;
+  const newStatus = req.body;
+
+  try {
+    if (newStatus) {
+      await updatingStatusContact(contactId, newStatus);
+      const response = await getById(contactId);
+
+      res.status(200).json({
+        status: "updated",
+        code: 200,
+        data: { contact: response },
+      });
     } else {
-      const error = new Error("Not found!");
-      error.status = 404;
-      throw error;
+      res.status(400).json({
+        status: "failed",
+        code: 400,
+        data: { message: "missing field favorite" },
+      });
     }
   } catch (e) {
-    return e;
-  }
-};
-
-const addContact = async (body) => {
-  try {
-    const contact = await addContactSchema.validateAsync(body);
-    const contactsList = await JSON.parse(await fs.readFile(currentPath));
-    contactsList.push(contact);
-
-    await fs.writeFile(currentPath, JSON.stringify(contactsList, null, 2));
-    const response = contactsList.filter((item) => item.id === body.id);
-    return response;
-  } catch (e) {
-    return e;
-  }
-};
-
-const updateContact = async (contactId, body) => {
-  try {
-    const updatedContact = await updateContactSchema.validateAsync(body);
-
-    const listContacts = await JSON.parse(await fs.readFile(currentPath));
-    let contact = listContacts.find((item) => item.id === contactId);
-
-    if (contact) {
-      contact = { ...contact, ...updatedContact };
-
-      const newContactsList = listContacts.filter(
-        (item) => item.id !== contactId
-      );
-      newContactsList.push(contact);
-
-      await fs.writeFile(currentPath, JSON.stringify(newContactsList, null, 2));
-
-      return contact;
-    } else {
-      const error = new Error("Not found");
-      error.status = 404;
-      throw error;
-    }
-  } catch (e) {
-    return e;
+    res.status(404).json({
+      status: "failed",
+      code: 404,
+      data: { message: "Not found" },
+    });
   }
 };
 
@@ -99,4 +144,5 @@ module.exports = {
   removeContact,
   addContact,
   updateContact,
+  updateStatusContact,
 };
